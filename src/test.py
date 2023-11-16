@@ -19,6 +19,21 @@ from sklearn.metrics.pairwise import euclidean_distances
 from skimage.measure import block_reduce
 
 import matplotlib.pyplot as plt
+import pandas as pd
+from PIL import Image
+import os
+
+
+def imshow(title, image = None, size = 6):
+    if image.any():
+      w, h = image.shape[0], image.shape[1]
+      aspect_ratio = w/h
+      plt.figure(figsize=(size * aspect_ratio,size))
+      plt.imshow(image)
+      plt.title(title)
+      plt.show()
+    else:
+      print("Image not found")
 
 def myModel(x, getK=1):
     x1 = PixelHop_Unit(x, dilate=1, pad='reflect', num_AC_kernels=9, weight_name='pixelhop1.pkl', getK=getK)
@@ -29,7 +44,10 @@ def myModel(x, getK=1):
     x3 = PixelHop_Unit(x2, dilate=2, pad='reflect', num_AC_kernels=35, weight_name='pixelhop3.pkl', getK=getK)
     x3 = AvgPooling(x3)
 
-    x4 = PixelHop_Unit(x3, dilate=2, pad='reflect', num_AC_kernels=55, weight_name='pixelhop4.pkl', getK=getK)
+    x4 = PixelHop_Uanit(x3, dilate=2, pad='reflect', num_AC_kernels=55, weight_name='pixelhop4.pkl', getK=getK)
+
+
+
 
     x2 = myResize(x2, x.shape[1], x.shape[2])
     x3 = myResize(x3, x.shape[1], x.shape[2])
@@ -41,25 +59,69 @@ if False:
     x = x.reshape(1, x.shape[0], x.shape[1], -1)
     feature = myModel(x, getK=1)
 if True:
-    print("in opensrc img")
-    train_images, train_labels, test_images, test_labels, class_list = import_data_mnist("0-9")  
-    N_train=1000
-    N_test=500
     SAVE={}
-    train_images=train_images[:N_train]
-    train_labels=train_labels[:N_train]
-    
-    # 查看第一个训练图像
-    first_train_image = train_images[0]
 
-    # 显示第一个训练图像
-    plt.imshow(first_train_image, cmap='gray')
-    plt.title(f'Label: {train_labels[0]}')  # 显示标签
-    plt.axis('off')  # 去除坐标轴
-    plt.show()
 
-    test_images=train_images[:N_test]
-    test_labels=train_labels[:N_test]
+    # 文件夹路径
+    img_dir = "../CWT result/cwt_MHE_result"
+
+    # 初始化用于存储图像数据和标签的列表
+    train_images = []
+    train_labels = []
+    test_images = []
+    test_labels = []
+    total_images = []
+
+    # 遍历图像文件夹中的图像
+    for filename in os.listdir(img_dir):
+        if filename.endswith(".png"):  # 仅处理.jpg格式的图像文件
+            image_path = os.path.join(img_dir, filename)
+            image = Image.open(image_path)  # 打开图像文件
+
+            # 根据文件名规则判断该图像属于训练集还是测试集
+            if "MHE_" in filename:
+                label = int(filename.split("_")[1].split(".")[0])  # 解析文件名中的数字作为标签
+                total_images.append(image)
+                # if label <= (1681):  # 将前80%的图像用于训练
+                #     train_images.append(image)
+                # else:
+                #     test_images.append(image)
+    # ---------------------------------------------------
+    drive_path = "../csv/Electricity_BME.csv"
+    slice_len = 500
+    # 从CSV文件中读取数据
+    df = pd.read_csv(drive_path)
+
+    # 初始化一个空列表，用于存储每1000行的P列的平均值
+    label = []
+
+    # 每1000行分组计算平均值
+    for i in range(0, len(df), slice_len):
+        group = df.iloc[i:i+slice_len]  # 获取每1000行数据
+        average_p = group["P"].mean()  # 计算P列的平均值
+        label.append(average_p)  # 将平均值添加到label列 表中
+
+    # 打印或使用label列表中的平均值
+    print("len.label",len(label))
+
+
+    # 将图像转换为NumPy数组
+    total_images = [np.array(image) for image in total_images]
+    # 归一化图像数据（将像素值缩放到0到1之间）
+    total_images = np.array(total_images) / 255.0
+
+    # 将数据划分为训练集和测试集
+    train_images, test_images, train_labels, test_labels = train_test_split(
+        total_images, labels, test_size=0.2, random_state=42
+    )
+
+
+    # # 可以进一步处理图像和标签，例如将其转换为NumPy数组
+    # train_labels = label[:1682]
+    # test_labels = label[-421:]
+    # # 将标签转换为NumPy数组
+    # train_labels = np.array(train_labels)
+    # test_labels = np.array(test_labels)
 
     # 打印示例图像和标签
     print("Train Images:", len(train_images))
@@ -89,6 +151,19 @@ if True:
 
     print("------------------------------------\n")
 #-------------------------
+
+
+    # for i in range(6):
+    #     plt.subplot(2, 3, i + 1)  # Create a 2x3 grid of subplots, and select the i-th subplot
+    #     plt.imshow(train_images[i], cmap='gray')  # Display the image in grayscale
+    #     plt.title(f"Label: {train_labels[i]}")  # Set the title with the label
+
+    # plt.tight_layout()  # Adjust subplot layout for better spacing
+    # plt.show()
+
+
+    test_images=train_images[:N_test]
+    test_labels=train_labels[:N_test]
     
     train_feature = PixelHop_Unit(train_images, dilate=1, pad='reflect', num_AC_kernels=5, weight_name='pixelhop1_mnist.pkl', getK=1)
     train_feature = block_reduce(train_feature, (1, 4, 4, 1), np.mean).reshape(N_train,-1)

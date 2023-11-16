@@ -2,8 +2,6 @@
 # yifanwang0916@outlook.com
 # 2019.09.25
 
-
-# 使用 python 3.7
 import numpy as np 
 import cv2
 import time
@@ -17,8 +15,6 @@ from framework.LAG import LAG_Unit
 from sklearn.model_selection import train_test_split
 from sklearn.metrics.pairwise import euclidean_distances
 from skimage.measure import block_reduce
-
-import matplotlib.pyplot as plt
 
 def myModel(x, getK=1):
     x1 = PixelHop_Unit(x, dilate=1, pad='reflect', num_AC_kernels=9, weight_name='pixelhop1.pkl', getK=getK)
@@ -36,43 +32,29 @@ def myModel(x, getK=1):
     x4 = myResize(x4, x.shape[1], x.shape[2])
     return np.concatenate((x1,x2,x3,x4), axis=3)
 if False:
-    print("in test img")
     x = cv2.imread('../data/test.jpg')
     x = x.reshape(1, x.shape[0], x.shape[1], -1)
     feature = myModel(x, getK=1)
 if True:
-    print("in opensrc img")
     train_images, train_labels, test_images, test_labels, class_list = import_data_mnist("0-9")  
     N_train=1000
     N_test=500
     SAVE={}
     train_images=train_images[:N_train]
     train_labels=train_labels[:N_train]
-    
-    # 查看第一个训练图像
-    first_train_image = train_images[0]
-
-    # 显示第一个训练图像
-    plt.imshow(first_train_image, cmap='gray')
-    plt.title(f'Label: {train_labels[0]}')  # 显示标签
-    plt.axis('off')  # 去除坐标轴
-    plt.show()
-
     test_images=train_images[:N_test]
     test_labels=train_labels[:N_test]
-
+    
     # 打印示例图像和标签
     print("Train Images:", len(train_images))
     print("Train Labels:", len(train_labels))
     print("Test Images:", len(test_images))
     print("Test Labels:", len(test_labels))
 
-
-
-
-
 #-------------------------
     print("after------------------------------------\n")
+    print("Initial type train_labels", type(train_labels))
+    print("Initial type test_labels", type(test_labels))
 
     # 顯示資料集的形狀
     print("Initial shape or dimensions of x_train", str(train_images.shape))
@@ -89,15 +71,14 @@ if True:
 
     print("------------------------------------\n")
 #-------------------------
-    
-    train_feature = PixelHop_Unit(train_images, dilate=1, pad='reflect', num_AC_kernels=5, weight_name='pixelhop1_mnist.pkl', getK=1)
+    train_feature=PixelHop_Unit(train_images, dilate=1, pad='reflect', num_AC_kernels=5, weight_name='pixelhop1_mnist.pkl', getK=1)
     train_feature = block_reduce(train_feature, (1, 4, 4, 1), np.mean).reshape(N_train,-1)
-    train_feature_reduce = LAG_Unit(train_feature,train_labels=train_labels, class_list=class_list,
+    train_feature_reduce=LAG_Unit(train_feature,train_labels=train_labels, class_list=class_list,
                              SAVE=SAVE,num_clusters=50,alpha=5,Train=True)
     
-    test_feature = PixelHop_Unit(test_images, dilate=1, pad='reflect', num_AC_kernels=5, weight_name='pixelhop1_mnist.pkl', getK=0)
-    test_feature = block_reduce(test_feature, (1, 4, 4, 1), np.mean).reshape(N_test,-1)
-    test_feature_reduce = LAG_Unit(test_feature,train_labels=None, class_list=class_list,
+    test_feature=PixelHop_Unit(test_images, dilate=1, pad='reflect', num_AC_kernels=5, weight_name='pixelhop1_mnist.pkl', getK=0)
+    test_feature=block_reduce(test_feature, (1, 4, 4, 1), np.mean).reshape(N_test,-1)
+    test_feature_reduce=LAG_Unit(test_feature,train_labels=None, class_list=class_list,
                          SAVE=SAVE,num_clusters=50,alpha=5,Train=False)
     
     from sklearn.svm import SVC
