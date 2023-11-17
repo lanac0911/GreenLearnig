@@ -48,6 +48,9 @@ def Relu(centroid_old):
     centroid_old[centroid_old<0]=0
     return centroid_old
 def llsr_train(feature_train,labels_train,encode=True,centroid=None,clus_labels=None,train_labels=None,scaler=None, alpha=10):
+    print('--------llsr_train--------')    
+    print("Shape of feature:", feature_train.shape)
+    print(" of feature:", feature_train.shape)
     if encode:      
         alpha=alpha
         print('Alpha:',alpha)
@@ -57,11 +60,16 @@ def llsr_train(feature_train,labels_train,encode=True,centroid=None,clus_labels=
         for i in range(n_sample):
             gt=train_labels[i]
             idx=clus_labels==gt
-            dis=euclidean_distances(feature_train[i].reshape(1,-1),centroid[idx]).reshape(-1)
-            dis=dis/(dis.min()+1e-5)
-            p_dis=np.exp(-dis*alpha)
-            p_dis=p_dis/p_dis.sum()
-            labels_train_onehot[i,idx]=p_dis            
+            if np.sum(idx) > 0:  # Check if there are non-zero centroids for the current class
+                dis=euclidean_distances(feature_train[i].reshape(1,-1),centroid[idx]).reshape(-1)
+                dis=dis/(dis.min()+1e-5)
+                p_dis=np.exp(-dis*alpha)
+                p_dis=p_dis/p_dis.sum()
+                labels_train_onehot[i,idx]=p_dis   
+            else:
+                # Handle the case where centroid[idx] is all zeros
+                # You can set a default value or handle it based on your specific case
+                labels_train_onehot[i, :] = 0.0  # Set to zero or handle it accordingly
     else:     
         labels_train_onehot = labels_train 
     feature_train = scaler.transform(feature_train)
@@ -79,23 +87,49 @@ def llsr_test(feature_test,weight_save,bias_save):
     return feature_test
 
 def compute_target_(feature,train_labels,num_clusters,class_list): 
+    print("num_clusters=",num_clusters)
     use_classes=len(class_list) 
+    print("Shape of feature:", feature.shape)
+    print("num_use_classes=",use_classes)
 
     train_labels = train_labels.reshape(-1)
+    print(f'{num_clusters} / {use_classes}')
     num_clusters_sub = int(num_clusters/use_classes)
+    # num_clusters_sub = 5
+
     batch_size= 1000 
     labels = np.zeros((feature.shape[0]))
     clus_labels = np.zeros((num_clusters,))
     centroid = np.zeros((num_clusters, feature.shape[1]))
     for i in range(use_classes):
-        ID=class_list[i]
-        feature_train = feature[train_labels==ID]
-        kmeans = MiniBatchKMeans(n_clusters=num_clusters_sub,batch_size=batch_size).fit(feature_train)
-#            kmeans = KMeans(n_clusters=num_clusters_sub).fit(feature_train)
-        labels[train_labels==ID] = kmeans.labels_ + i*num_clusters_sub
-        clus_labels[i*num_clusters_sub:(i+1)*num_clusters_sub] = ID
-        centroid[i*num_clusters_sub:(i+1)*num_clusters_sub] = kmeans.cluster_centers_
-        print ('FINISH KMEANS', i)
+        ID = class_list[i]
+        print(f'Class {ID} has {np.sum(train_labels == ID)} samples')
+        # 检查是否至少有一个样本属于当前类别
+        if np.sum(train_labels == ID) > 5:
+            feature_train = feature[train_labels == ID]
+            kmeans = MiniBatchKMeans(n_clusters=num_clusters_sub, batch_size=batch_size).fit(feature_train)
+            print(f"\n=[{i}]==test=== cluster_centers_.shape ", kmeans.cluster_centers_.shape,"======\n")
+            labels[train_labels == ID] = kmeans.labels_ + i * num_clusters_sub
+            clus_labels[i * num_clusters_sub:(i + 1) * num_clusters_sub] = ID
+            centroid[i * num_clusters_sub:(i + 1) * num_clusters_sub] = kmeans.cluster_centers_
+            print('FINISH KMEANS', i)
+        else:
+            # print('No samples for class', ID)
+            print(f'Not enough samples for class {ID} to perform K-Means with {num_clusters} clusters.')
+    print("===============finish for loop===============")
+
+
+
+        # ID=class_list[i]
+        # feature_train = feature[train_labels==ID]
+        # print("Shape of feature_train:", feature_train.shape)
+        # print(f'Class {ID}: Number of samples = {len(feature_train)}')
+        # kmeans = MiniBatchKMeans(n_clusters=5,batch_size=batch_size).fit(feature_train)
+        # # kmeans = MiniBatchKMeans(n_clusters=5).fit(feature_train)
+        # labels[train_labels==ID] = kmeans.labels_ + i*num_clusters_sub
+        # clus_labels[i*num_clusters_sub:(i+1)*num_clusters_sub] = ID
+        # centroid[i*num_clusters_sub:(i+1)*num_clusters_sub] = kmeans.cluster_centers_
+        # print ('FINISH KMEANS', i)
         
     return labels, clus_labels.astype(int),centroid
 
@@ -124,15 +158,17 @@ def LAG_Unit(feature,train_labels=None, class_list=None, SAVE=None,num_clusters=
         use_classes=len(np.unique(train_labels)) 
         k=0                        
         # Compute output features       
-        labels_train,clus_labels,centroid = compute_target_(feature,train_labels,num_clusters,
-          class_list)    
+        labels_train,clus_labels,centroid = compute_target_(feature,train_labels,num_clusters,class_list)    
+        print("\n~~~~~~~~~~~~return result--", labels_train, clus_labels, centroid)
 #                SAVE['train_dis']=cosine_similarity(feature_train,centroid)
 #                SAVE['test_dis']=cosine_similarity(feature_test,centroid)
         # Solve LSR
         scaler=preprocessing.StandardScaler().fit(feature)  
+        print("\n~~~~~~~~~~~~return scaler--", scaler)
         weight_save,bias_save=llsr_train(feature,labels_train.astype(int),encode=True,centroid=centroid,
                                          clus_labels=clus_labels,train_labels=train_labels,
                                          scaler=scaler,alpha=alpha)
+        print("\n~~~~~~~~~~~~return weight_sav, bias_savee--", weight_save,bias_save)
         
         SAVE[str(k)+' clus_labels'] = clus_labels
         SAVE[str(k)+' LLSR weight'] = weight_save

@@ -44,10 +44,10 @@ if True:
     train_labels=train_labels[:N_train]
     test_images=train_images[:N_test]
     test_labels=train_labels[:N_test]
-    
+    print("class=", class_list)
     # 打印示例图像和标签
     print("Train Images:", len(train_images))
-    print("Train Labels:", len(train_labels))
+    print("Train Labels:", (train_labels))
     print("Test Images:", len(test_images))
     print("Test Labels:", len(test_labels))
 

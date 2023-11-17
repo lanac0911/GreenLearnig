@@ -1,81 +1,62 @@
-import os
+import numpy as np 
 import cv2
-import numpy as np
-from PIL import Image
-import tensorflow as tf
+import time
+
+from framework.layer import *
+from framework.utli import *
+from framework.pixelhop import *
+from framework.data import *
+from framework.LAG import LAG_Unit
+
 from sklearn.model_selection import train_test_split
+from sklearn.metrics.pairwise import euclidean_distances
+from skimage.measure import block_reduce
+from utils.load_data import load_data, generate_class_list, generate_maped_labels
 
-IMG_DIR = "../CWT result/CWT_MHE_result"
-
-def load_lable ():
-    # # 讀取圖片資料夾
-    # img_files = os.listdir(IMG_DIR)
-
-    # 讀取 LABLE TXT 檔
-    label_file = "lable.txt"
-    with open(label_file, "r") as f:
-        content = f.read()
-    labels = [float(x) for x in content.split(',')]
-    return np.array(labels)
-    # print("labels=",len(labels))
-
-
-# 獲取圖片文件列表
-img_files = [os.path.join(IMG_DIR, file) for file in os.listdir(IMG_DIR) if file.endswith(('png'))]
-# 讀取並處理圖片
-def load_and_preprocess_image(file_path):
-    img = Image.open(file_path)
-    # 在這裡，你可以進行圖片的預處理，例如調整大小、正規化等
-    img = img.resize((32, 32))  # 舉例：將圖片大小調整為 224x224
-    img_array = np.array(img) / 255.0  # 正規化到 [0, 1]
-    return img_array
-
-# 讀取所有圖片並堆疊成數組
-data = [load_and_preprocess_image(file) for file in img_files]
-data = np.stack(data)
-
-# 假設你有一個對應的標籤列表 labels，它的長度應該和圖片數目相同
-labels = load_lable()  # 這裡是你的標籤列表
-
-# 使用 train_test_split 函數拆分訓練集和測試集
-train_images, test_images, train_labels, test_label = train_test_split(data, labels, test_size=0.2, random_state=42)
-train_labels
-
-
-# print("train_images=",train_images)
-# print("--------------------------")
-# print("train_labels=",train_labels)
-# 打印示例图像和标签
-print("Train Images:", len(train_images))
-print("Train Labels:", len(train_labels))
-print("Test Images:", len(test_images))
-print("Test Labels:", len(test_label))
-
+train_images, train_labels, test_images, test_labels, class_list = load_data()
+# class_list = generate_class_list(train_labels, test_labels)
+print(f"class_list.len = {len(class_list)}, = , {class_list}")
 #-------------------------
 print("after------------------------------------\n")
 
 # 顯示資料集的形狀
 print("Initial shape or dimensions of x_train", str(train_images.shape))
 print("Initial shape or dimensions of x_test", str(test_images.shape))
-print("Initial type x_train", type(train_images))
-print("Initial type x_test", type(test_images))
-print("Initial type train_labels", type(train_labels))
-print("Initial type test_label", type(test_label))
 
 print("Initial shape or dimensions of train_labels", str(train_labels.shape))
-print("Initial shape or dimensions of test_label", str(test_label.shape))
+print("Initial shape or dimensions of test_labels", str(test_labels.shape))
 print('\n')
 
 # 顯示每組資料的sample數
 print ("Number of samples in our training data: " + str(len(train_images)))
 print ("Number of labels in our training data: " + str(len(train_labels)))
 print ("Number of samples in our test data: " + str(len(test_images)))
-print ("Number of labels in our test data: " + str(len(test_label)))
+print ("Number of labels in our test data: " + str(len(test_labels)))
 
 print("------------------------------------\n")
+#-------------------------
+SAVE = {}
+N_train = len(train_images)
+N_test = len(test_images)
 
-# # 創建 TensorFlow Dataset
-# dataset = tf.data.Dataset.from_tensor_slices(data)
-# num_images = tf.data.experimental.cardinality(dataset).numpy()
-# print("Number of images:", num_images)
-# print("=",dataset)
+train_feature=PixelHop_Unit(train_images, dilate=1, pad='reflect', num_AC_kernels=5, weight_name='pixelhop1_mnist.pkl', getK=1)
+train_feature = block_reduce(train_feature, (1, 4, 4, 1), np.mean).reshape(N_train,-1)
+train_feature_reduce=LAG_Unit(train_feature,train_labels=train_labels, class_list=class_list,
+                            SAVE=SAVE,num_clusters=50,alpha=5,Train=True)
+
+test_feature=PixelHop_Unit(test_images, dilate=1, pad='reflect', num_AC_kernels=5, weight_name='pixelhop1_mnist.pkl', getK=0)
+test_feature=block_reduce(test_feature, (1, 4, 4, 1), np.mean).reshape(N_test,-1)
+test_feature_reduce=LAG_Unit(test_feature,train_labels=None, class_list=class_list,
+                        SAVE=SAVE,num_clusters=50,alpha=5,Train=False)
+
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score
+from sklearn import preprocessing
+scaler=preprocessing.StandardScaler()
+feature = scaler.fit_transform(train_feature_reduce)
+feature_test = scaler.transform(test_feature_reduce)     
+
+clf=SVC().fit(feature, train_labels) 
+##        clf=RandomForestClassifier(n_estimators=500,max_depth=5).fit(train_f, train_labels) 
+print('***** Train ACC:', accuracy_score(train_labels,clf.predict(feature)))
+print('***** Test ACC:', accuracy_score(test_labels,clf.predict(feature_test)))
