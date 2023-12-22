@@ -1,0 +1,3 @@
+文件：Electricity_MHE.csv
+擷取特徵：P
+筆數4205
